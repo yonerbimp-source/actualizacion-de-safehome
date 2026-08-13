@@ -162,199 +162,355 @@ button.danger{
 </div>
 
 <script>
-const JOBS_KEY="safehome_jobs_base";
-const VILLAS_KEY="safehome_villas";
-const $=id=>document.getElementById(id);
+const JOBS_KEY = "safehome_jobs_base";
+const VILLAS_KEY = "safehome_villas";
+const $ = id => document.getElementById(id);
 
-let jobs=[], villas=[], includeExpenses={}, includeJobs={}, includeSpanish={}, includeEnglish={};
+let jobs = [];
+let villas = [];
+const selections = {};
 
-function money(n){ return Number(n||0).toLocaleString("es-DO",{minimumFractionDigits:2}); }
-function propertyName(v){ return `${v.owner} – ${v.type || "Villa"} ${v.number}`; }
+function money(n){
+  return Number(n || 0).toLocaleString("es-DO",{minimumFractionDigits:2});
+}
+
+function propertyName(v){
+  return `${v.owner} – ${v.type || "Villa"} ${v.number}`;
+}
 
 function toMinutes(hhmm){
-  const [h,m] = String(hhmm||"0:0").split(":").map(Number);
-  return (h||0)*60 + (m||0);
+  const [h,m] = String(hhmm || "0:0").split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
 }
+
 function minutesBetween(a,b){
-  const s=toMinutes(a);
-  let e=toMinutes(b);
-  if(e<=s) e+=24*60;
-  return e-s;
+  const s = toMinutes(a);
+  let e = toMinutes(b);
+  if(e <= s) e += 24 * 60;
+  return e - s;
 }
+
 function hoursBetween(a,b){
-  return minutesBetween(a,b)/60;
+  return minutesBetween(a,b) / 60;
 }
+
 function formatHMFromMinutes(mins){
-  const total=Math.max(0, Math.round(Number(mins)||0));
-  const h=Math.floor(total/60);
-  const m=total%60;
+  const total = Math.max(0, Math.round(Number(mins) || 0));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   return `${h}h ${m}m`;
 }
+
 function formatDuration(a,b){
-  if(!a||!b) return "";
+  if(!a || !b) return "";
   return formatHMFromMinutes(minutesBetween(a,b));
 }
 
 function labor(j){
-  if((j.type==="hours" || (j.start&&j.end&&j.rate)) && j.start&&j.end&&j.rate){
-    return Number((hoursBetween(j.start,j.end)*Number(j.rate)).toFixed(2));
+  if((j.type === "hours" || (j.start && j.end && j.rate)) && j.start && j.end && j.rate){
+    return Number((hoursBetween(j.start,j.end) * Number(j.rate)).toFixed(2));
   }
-  return Number(j.labor||0);
-}
-function jobKey(j,idx){
-  const subj = j.subject || j.desc || "";
-  return (j.date||"")+"|"+(j.villa||"")+"|"+subj+"|"+(j.currency||"")+"|"+idx;
+  return Number(j.labor || 0);
 }
 
 function langFields(j){
   return {
-    subjectEs: j.subjectEs !== undefined ? (j.subjectEs||"") : (j.subject||j.desc||""),
-    detailsEs: j.detailsEs !== undefined ? (j.detailsEs||"") : (j.details||""),
+    subjectEs: j.subjectEs !== undefined ? (j.subjectEs || "") : (j.subject || j.desc || ""),
+    detailsEs: j.detailsEs !== undefined ? (j.detailsEs || "") : (j.details || ""),
     subjectEn: j.subjectEn || "",
     detailsEn: j.detailsEn || ""
   };
 }
+
 function esc(v){
-  return String(v||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return String(v || "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
 }
 
 function load(){
-  jobs=JSON.parse(localStorage.getItem(JOBS_KEY)||"[]");
-  villas=JSON.parse(localStorage.getItem(VILLAS_KEY)||"[]");
+  jobs = JSON.parse(localStorage.getItem(JOBS_KEY) || "[]");
+  villas = JSON.parse(localStorage.getItem(VILLAS_KEY) || "[]");
 }
 
-function computeTotals(filtered){
-  let rd=0, usd=0;
-  filtered.forEach(j=>{
-    const k=jobKey(j,j._i);
-    if(includeJobs[k] === false) return;
-    const lab=labor(j);
-    const exps = includeExpenses[k] ? (j.expenses||[]) : [];
-    const tot = lab + exps.reduce((s,e)=>s+Number(e.amount||0),0);
-    const cur = j.currency || "RD$";
-    if(cur==="US$") usd += tot; else rd += tot;
+function getSelection(index, job){
+  if(!selections[index]){
+    const lf = langFields(job);
+    const hasEs = !!(lf.subjectEs || lf.detailsEs);
+    const hasEn = !!(lf.subjectEn || lf.detailsEn);
+    selections[index] = {
+      include: true,
+      es: hasEs,
+      en: hasEn,
+      expenses: false
+    };
+  }
+  return selections[index];
+}
+
+function setInclude(index, checked){
+  const j = jobs[index];
+  if(!j) return;
+  getSelection(index,j).include = checked;
+  render();
+}
+
+function setLanguage(index, lang, checked){
+  const j = jobs[index];
+  if(!j) return;
+  const s = getSelection(index,j);
+  if(lang === "es") s.es = checked;
+  if(lang === "en") s.en = checked;
+  render();
+}
+
+function setExpenses(index, checked){
+  const j = jobs[index];
+  if(!j) return;
+  getSelection(index,j).expenses = checked;
+  render();
+}
+
+function filteredJobs(){
+  const m = $("monthPick").value;
+  const v = $("villaPick").value;
+  return jobs
+    .map((j,index)=>({job:j,index}))
+    .filter(x => (x.job.date || "").startsWith(m))
+    .filter(x => v === "ALL" || x.job.villa === v);
+}
+
+function computeTotals(items){
+  let rd = 0;
+  let usd = 0;
+
+  items.forEach(({job,index})=>{
+    const s = getSelection(index,job);
+    if(!s.include) return;
+
+    const lab = labor(job);
+    const exps = s.expenses ? (job.expenses || []) : [];
+    const total = lab + exps.reduce((sum,e)=>sum + Number(e.amount || 0),0);
+    const cur = job.currency || "RD$";
+
+    if(cur === "US$") usd += total;
+    else rd += total;
   });
+
   $("sumRD").textContent = money(rd);
   $("sumUSD").textContent = money(usd);
 }
 
 function render(){
-  syncLanguageSelectionsFromUI();
-  const m=monthPick.value, v=villaPick.value, box=result;
-  box.innerHTML="";
+  const box = $("result");
+  const items = filteredJobs();
+  box.innerHTML = "";
 
-  const filtered = jobs.map((j,i)=>({...j,_i:i}))
-    .filter(j=>(j.date||"").startsWith(m)&&(v==="ALL"||j.villa===v));
+  if(!items.length){
+    box.innerHTML = "<div class='muted'>No hay trabajos para esta selección.</div>";
+    $("sumRD").textContent = money(0);
+    $("sumUSD").textContent = money(0);
+    return;
+  }
 
-  filtered.forEach(j=>{
-    const k=jobKey(j,j._i);
-    if(includeExpenses[k]===undefined) includeExpenses[k]=false;
-    if(includeJobs[k]===undefined) includeJobs[k]=true;
-    const lf = langFields(j);
+  items.forEach(({job,index})=>{
+    const s = getSelection(index,job);
+    const lf = langFields(job);
     const hasEs = !!(lf.subjectEs || lf.detailsEs);
     const hasEn = !!(lf.subjectEn || lf.detailsEn);
-    if(includeSpanish[k]===undefined) includeSpanish[k]=hasEs;
-    if(includeEnglish[k]===undefined) includeEnglish[k]=hasEn;
+    const cur = job.currency || "RD$";
+    const lab = labor(job);
+    const exps = s.expenses ? (job.expenses || []) : [];
+    const total = lab + exps.reduce((sum,e)=>sum + Number(e.amount || 0),0);
 
-    const cur = j.currency || "RD$";
-    const lab=labor(j);
-    const total=lab+(includeExpenses[k]?(j.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0):0);
+    const card = document.createElement("div");
+    card.className = `card report-job ${s.include ? "included-job" : "excluded-job"}`;
+    card.style.marginBottom = "14px";
 
-    box.innerHTML+=`
-      <div class="card report-job ${includeJobs[k]!==false?"included-job":"excluded-job"}" style="margin-bottom:14px">
-        <div class="lang-es ${includeSpanish[k]&&hasEs?"":"lang-not-selected"}">
-          ${lf.subjectEs ? `<div class="item-title">🇩🇴 ${esc(lf.subjectEs)}</div>` : ""}
-          ${lf.detailsEs ? `<div class="muted" style="margin-top:4px">${esc(lf.detailsEs)}</div>` : ""}
-        </div>
-        <div class="lang-en ${includeEnglish[k]&&hasEn?"":"lang-not-selected"}">
-          ${lf.subjectEn ? `<div class="item-title" style="margin-top:8px">🇺🇸 ${esc(lf.subjectEn)}</div>` : ""}
-          ${lf.detailsEn ? `<div class="muted" style="margin-top:4px">${esc(lf.detailsEn)}</div>` : ""}
-        </div>
-        <div class="muted">${j.date} · ${j.villa} · ${cur}</div>
+    card.innerHTML = `
+      <div class="lang-es ${s.es && hasEs ? "" : "lang-not-selected"}">
+        ${lf.subjectEs ? `<div class="item-title">🇩🇴 ${esc(lf.subjectEs)}</div>` : ""}
+        ${lf.detailsEs ? `<div class="muted" style="margin-top:4px">${esc(lf.detailsEs)}</div>` : ""}
+      </div>
 
-        <div class="print-config" style="margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:#111">
-          <label>
-            <input type="checkbox" ${includeJobs[k]!==false?"checked":""}
-              onchange="includeJobs['${k.replace(/'/g,"\'")}']=this.checked;render()">
-            Incluir este trabajo en la factura
-          </label>
-          <div class="muted" style="margin-top:6px">
-            Estado: ${includeJobs[k]!==false?"Incluido para cobrar":"No incluido para cobrar"}
-          </div>
-        </div>
+      <div class="lang-en ${s.en && hasEn ? "" : "lang-not-selected"}">
+        ${lf.subjectEn ? `<div class="item-title" style="margin-top:8px">🇺🇸 ${esc(lf.subjectEn)}</div>` : ""}
+        ${lf.detailsEn ? `<div class="muted" style="margin-top:4px">${esc(lf.detailsEn)}</div>` : ""}
+      </div>
 
-        <div class="print-config" style="margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:14px">
-          <strong>Idioma que aparecerá en la factura:</strong>
-          <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px">
-            <label style="opacity:${hasEs?1:.45}">
-              <input id="lang-es-${j._i}" type="checkbox" ${includeSpanish[k]&&hasEs?"checked":""} ${hasEs?"":"disabled"}
-                onchange="includeSpanish['${k.replace(/'/g,"\'")}']=this.checked">
-              Español
-            </label>
-            <label style="opacity:${hasEn?1:.45}">
-              <input id="lang-en-${j._i}" type="checkbox" ${includeEnglish[k]&&hasEn?"checked":""} ${hasEn?"":"disabled"}
-                onchange="includeEnglish['${k.replace(/'/g,"\'")}']=this.checked">
-              Inglés
-            </label>
-          </div>
-          <div class="muted" style="margin-top:6px">Puedes seleccionar uno o los dos idiomas.</div>
-        </div>
+      <div class="muted">${job.date || ""} · ${esc(job.villa || "")} · ${cur}</div>
 
-        ${j.start?`<div style="margin-top:10px">⏰ ${j.start} → ${j.end}</div>`:""}
-        ${j.rate?`<div class="muted">⏱️ ${formatDuration(j.start,j.end)} · 💲 ${cur} ${money(j.rate)} / hora</div>`:""}
-        <div>Mano de obra: <strong>${cur} ${money(lab)}</strong></div>
-
-        <div class="print-config" style="margin-top:10px;padding:10px 12px;border:1px dashed var(--border);border-radius:14px">
-          <label>
-            <input type="checkbox" ${includeExpenses[k]?"checked":""}
-              onchange="includeExpenses['${k.replace(/'/g,"\'")}']=this.checked;render()">
-            Incluir gastos en este trabajo
-          </label>
-
-          ${(j.expenses||[]).length
-            ? `
-              <div style="margin-top:8px;padding-left:10px">
-                ${(j.expenses||[]).map(e=>`
-                  <div class="muted">• ${e.desc}: ${cur} ${money(e.amount)}</div>
-                `).join("")}
-              </div>
-              <div class="muted" style="margin-top:6px">
-                Estado de gastos: ${includeExpenses[k]?"Incluidos":"No incluidos"}
-              </div>
-            `
-            : `<div class="muted" style="margin-top:8px">Sin gastos</div>`
-          }
-        </div>
-
-        <div style="text-align:right;font-weight:900;color:var(--green);margin-top:10px">
-          ${includeJobs[k]!==false ? `TOTAL A COBRAR: ${cur} ${money(total)}` : `NO INCLUIDO: ${cur} ${money(total)}`}
+      <div class="print-config" style="margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:#111">
+        <label>
+          <input type="checkbox" ${s.include ? "checked" : ""}
+            onchange="setInclude(${index}, this.checked)">
+          Incluir este trabajo en la factura
+        </label>
+        <div class="muted" style="margin-top:6px">
+          Estado: ${s.include ? "Incluido para cobrar" : "No incluido para cobrar"}
         </div>
       </div>
+
+      <div class="print-config" style="margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:14px">
+        <strong>Idioma que aparecerá en la factura:</strong>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px">
+          <label style="opacity:${hasEs ? 1 : .45}">
+            <input type="checkbox" ${s.es && hasEs ? "checked" : ""} ${hasEs ? "" : "disabled"}
+              onchange="setLanguage(${index}, 'es', this.checked)">
+            Español
+          </label>
+          <label style="opacity:${hasEn ? 1 : .45}">
+            <input type="checkbox" ${s.en && hasEn ? "checked" : ""} ${hasEn ? "" : "disabled"}
+              onchange="setLanguage(${index}, 'en', this.checked)">
+            Inglés
+          </label>
+        </div>
+        <div class="muted" style="margin-top:6px">Puedes seleccionar uno o los dos idiomas.</div>
+      </div>
+
+      ${job.start ? `<div style="margin-top:10px">⏰ ${job.start} → ${job.end}</div>` : ""}
+      ${job.rate ? `<div class="muted">⏱️ ${formatDuration(job.start,job.end)} · 💲 ${cur} ${money(job.rate)} / hora</div>` : ""}
+      <div>Mano de obra: <strong>${cur} ${money(lab)}</strong></div>
+
+      <div class="print-config" style="margin-top:10px;padding:10px 12px;border:1px dashed var(--border);border-radius:14px">
+        <label>
+          <input type="checkbox" ${s.expenses ? "checked" : ""}
+            onchange="setExpenses(${index}, this.checked)">
+          Incluir gastos en este trabajo
+        </label>
+        <div class="muted" style="margin-top:6px">
+          ${(job.expenses || []).length
+            ? `Estado de gastos: ${s.expenses ? "Incluidos" : "No incluidos"}`
+            : "Sin gastos"}
+        </div>
+      </div>
+
+      ${s.expenses && (job.expenses || []).length ? `
+        <div class="expense-summary" style="margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px">
+          <div style="font-weight:900;margin-bottom:6px">GASTOS / EXPENSES</div>
+          ${(job.expenses || []).map(e=>`
+            <div style="margin-top:4px">
+              ${esc(e.desc || "Gasto")}: <strong>${cur} ${money(e.amount)}</strong>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+
+      <div style="text-align:right;font-weight:900;color:var(--green);margin-top:10px">
+        ${s.include ? `TOTAL A COBRAR: ${cur} ${money(total)}` : `NO INCLUIDO: ${cur} ${money(total)}`}
+      </div>
     `;
+
+    box.appendChild(card);
   });
 
-  computeTotals(filtered);
+  computeTotals(items);
+}
+
+function buildInvoiceData(){
+  const v = $("villaPick").value;
+  const m = $("monthPick").value;
+
+  if(v === "ALL"){
+    return {error:"Selecciona una villa o apartamento para generar la factura"};
+  }
+
+  const invoiceItems = [];
+
+  for(const {job,index} of filteredJobs()){
+    const s = getSelection(index,job);
+    if(!s.include) continue;
+
+    const lf = langFields(job);
+    const selectedTexts = [];
+
+    if(s.es && (lf.subjectEs || lf.detailsEs)){
+      selectedTexts.push({
+        lang:"es",
+        subject:lf.subjectEs || "",
+        details:lf.detailsEs || ""
+      });
+    }
+
+    if(s.en && (lf.subjectEn || lf.detailsEn)){
+      selectedTexts.push({
+        lang:"en",
+        subject:lf.subjectEn || "",
+        details:lf.detailsEn || ""
+      });
+    }
+
+    if(selectedTexts.length === 0){
+      return {error:"Hay un trabajo incluido sin idioma seleccionado. Marca Español, Inglés o ambos."};
+    }
+
+    const lab = labor(job);
+    const cur = job.currency || "RD$";
+    const exps = s.expenses
+      ? (job.expenses || []).map(e=>({
+          desc: e.desc || "Gasto",
+          amount: Number(e.amount || 0)
+        }))
+      : [];
+
+    const total = lab + exps.reduce((sum,e)=>sum + Number(e.amount || 0),0);
+
+    invoiceItems.push({
+      selectedTexts,
+      date: job.date || "",
+      currency: cur,
+      start: job.start || "",
+      end: job.end || "",
+      hours_decimal: job.start && job.end ? Number(hoursBetween(job.start,job.end).toFixed(2)) : null,
+      hours_fmt: job.start && job.end ? formatDuration(job.start,job.end) : null,
+      rate: Number(job.rate || 0),
+      labor: lab,
+      expenses: exps,
+      total
+    });
+  }
+
+  if(!invoiceItems.length){
+    return {error:"No hay trabajos seleccionados para la factura"};
+  }
+
+  return {
+    data:{
+      villa:v,
+      mes:m,
+      items:invoiceItems
+    }
+  };
+}
+
+function imprimirFactura(){
+  const result = buildInvoiceData();
+  if(result.error){
+    alert(result.error);
+    return;
+  }
+
+  const payload = encodeURIComponent(JSON.stringify(result.data));
+  window.open(`factura.html#data=${payload}`,"_blank");
 }
 
 function imprimirReporte(){
-  const m=monthPick.value, v=villaPick.value;
-  const selected = jobs.map((j,i)=>({...j,_i:i}))
-    .filter(j=>(j.date||"").startsWith(m)&&(v==="ALL"||j.villa===v))
-    .filter(j=>includeJobs[jobKey(j,j._i)]!==false);
+  const items = filteredJobs().filter(({job,index})=>getSelection(index,job).include);
 
-  if(!selected.length){
+  if(!items.length){
     alert("No hay trabajos seleccionados para imprimir.");
     return;
   }
 
-  for(const j of selected){
-    const k=jobKey(j,j._i);
-    const lf=langFields(j);
-    const hasEs=!!(lf.subjectEs||lf.detailsEs);
-    const hasEn=!!(lf.subjectEn||lf.detailsEn);
-    const showEs=includeSpanish[k]===true && hasEs;
-    const showEn=includeEnglish[k]===true && hasEn;
-    if(!showEs && !showEn){
+  for(const {job,index} of items){
+    const s = getSelection(index,job);
+    const lf = langFields(job);
+    const hasSelectedLanguage =
+      (s.es && (lf.subjectEs || lf.detailsEs)) ||
+      (s.en && (lf.subjectEn || lf.detailsEn));
+
+    if(!hasSelectedLanguage){
       alert("Hay un trabajo seleccionado sin idioma. Marca Español, Inglés o ambos.");
       return;
     }
@@ -363,93 +519,31 @@ function imprimirReporte(){
   window.print();
 }
 
-function syncLanguageSelectionsFromUI(){
-  jobs.forEach((j,i)=>{
-    const k=jobKey(j,i);
-    const es=document.getElementById(`lang-es-${i}`);
-    const en=document.getElementById(`lang-en-${i}`);
-    if(es) includeSpanish[k]=es.checked;
-    if(en) includeEnglish[k]=en.checked;
-  });
-}
-
-function imprimirFactura(){
-  syncLanguageSelectionsFromUI();
-  const m=monthPick.value, v=villaPick.value;
-  if(v==="ALL"){
-    alert("Selecciona una villa o apartamento para generar la factura");
-    return;
-  }
-
-  const rows = jobs.map((j,i)=>({...j,_i:i}))
-    .filter(j=>(j.date||"").startsWith(m)&&j.villa===v)
-    .filter(j=>includeJobs[jobKey(j,j._i)]!==false)
-    .map(j=>{
-      const k=jobKey(j,j._i);
-      const lab=labor(j);
-      const cur=j.currency||"RD$";
-      const exps=includeExpenses[k]? (j.expenses||[]) : [];
-      const total=lab+exps.reduce((s,e)=>s+Number(e.amount||0),0);
-      const lf=langFields(j);
-
-      const selectedTexts=[];
-      if(includeSpanish[k]===true && (lf.subjectEs || lf.detailsEs)){
-        selectedTexts.push({
-          lang:"es",
-          subject:lf.subjectEs||"",
-          details:lf.detailsEs||""
-        });
-      }
-      if(includeEnglish[k]===true && (lf.subjectEn || lf.detailsEn)){
-        selectedTexts.push({
-          lang:"en",
-          subject:lf.subjectEn||"",
-          details:lf.detailsEn||""
-        });
-      }
-
-      return{
-        selectedTexts,
-        date:j.date,
-        currency:cur,
-        start:j.start,
-        end:j.end,
-        hours_decimal:j.start?Number(hoursBetween(j.start,j.end).toFixed(2)):null,
-        hours_fmt:j.start?formatDuration(j.start,j.end):null,
-        rate:j.rate,
-        labor:lab,
-        expenses:exps,
-        total
-      };
-    });
-
-  if(!rows.length){
-    alert("No hay trabajos seleccionados para la factura");
-    return;
-  }
-
-  if(rows.some(r=>r.selectedTexts.length===0)){
-    alert("Hay un trabajo incluido sin idioma seleccionado. Marca Español, Inglés o ambos.");
-    return;
-  }
-
-  const facturaData={villa:v,mes:m,items:rows};
-  const payload=encodeURIComponent(JSON.stringify(facturaData));
-  window.open("factura.html#data="+payload,"_blank");
-}
-
 document.addEventListener("DOMContentLoaded",()=>{
   load();
-  monthPick.value=new Date().toISOString().slice(0,7);
-  villaPick.innerHTML=`<option value="ALL">Seleccionar villa / apartamento</option>`;
+
+  $("monthPick").value = new Date().toISOString().slice(0,7);
+  $("villaPick").innerHTML = `<option value="ALL">Seleccionar villa / apartamento</option>`;
+
   villas.forEach(v=>{
-    const n=propertyName(v);
-    villaPick.innerHTML+=`<option value="${n}">${n}</option>`;
+    const n = propertyName(v);
+    const option = document.createElement("option");
+    option.value = n;
+    option.textContent = n;
+    $("villaPick").appendChild(option);
   });
-  monthPick.onchange=render;
-  villaPick.onchange=render;
+
+  $("monthPick").addEventListener("change",render);
+  $("villaPick").addEventListener("change",render);
+
   render();
 });
+
+window.setInclude = setInclude;
+window.setLanguage = setLanguage;
+window.setExpenses = setExpenses;
+window.imprimirFactura = imprimirFactura;
+window.imprimirReporte = imprimirReporte;
 </script>
 </body>
 </html>

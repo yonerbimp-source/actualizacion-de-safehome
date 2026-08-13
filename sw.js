@@ -1,4 +1,4 @@
-const CACHE_NAME = "safehome-cache-v19";
+const CACHE_NAME = "safehome-cache-v25";
 const FILES_TO_CACHE = [
   "./",
   "./reporte_mensual.html",

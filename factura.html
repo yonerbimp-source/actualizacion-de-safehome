@@ -85,98 +85,107 @@ th{background:#f2f2f2}
 </div>
 
 <script>
-let data = {};
-try{
-  const hash = window.location.hash || "";
-  if(hash.startsWith("#data=")){
-    data = JSON.parse(decodeURIComponent(hash.slice(6)));
-  }else{
-    // Compatibilidad con versiones anteriores.
-    data = JSON.parse(sessionStorage.getItem("FACTURA_DATA") || "{}");
-  }
-}catch(e){
-  data = {};
-}
 const $ = id => document.getElementById(id);
 
-function money(n){ return Number(n||0).toLocaleString("es-DO",{minimumFractionDigits:2}); }
-
-function toMinutes(hhmm){
-  const [h,m] = String(hhmm||"0:0").split(":").map(Number);
-  return (h||0)*60 + (m||0);
-}
-function minutesBetween(a,b){
-  const s=toMinutes(a);
-  let e=toMinutes(b);
-  if(e<=s) e+=24*60;
-  return e-s;
-}
-function formatHMFromMinutes(mins){
-  const total=Math.max(0, Math.round(Number(mins)||0));
-  const h=Math.floor(total/60);
-  const m=total%60;
-  return `${h}h ${m}m`;
-}
-function formatDuration(a,b){
-  if(!a||!b) return "";
-  return formatHMFromMinutes(minutesBetween(a,b));
+function money(n){
+  return Number(n || 0).toLocaleString("es-DO",{minimumFractionDigits:2});
 }
 
-
-if(!data || !Array.isArray(data.items)){
-  document.body.innerHTML = `<div style="font-family:Arial;padding:30px"><h2>No se pudieron cargar los datos de la factura.</h2><p>Vuelve a REPORTES y presiona “Imprimir factura” nuevamente.</p></div>`;
-  throw new Error("FACTURA_DATA no disponible");
+function esc(v){
+  return String(v || "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;");
 }
 
-$("cliente").textContent = data.villa || "";
-$("periodo").textContent = data.mes || "";
-$("fecha").textContent = new Date().toLocaleDateString();
-
-let sumRD = 0;
-let sumUSD = 0;
-
-(data.items || []).forEach(j=>{
-  const cur = j.currency || "RD$";
-  if(cur==="US$") sumUSD += Number(j.total||0);
-  else sumRD += Number(j.total||0);
-
-  let detail = "";
-  if(j.start && j.end){
-    detail += `Moneda: <strong>${cur}</strong><br>`;
-    detail += `Horario: ${j.start} → ${j.end}<br>`;
-    detail += `Horas trabajadas: ${j.hours_fmt || (j.start&&j.end?formatDuration(j.start,j.end): (j.hours_decimal!=null?`${j.hours_decimal}h`:""))}<br>`;
-    detail += `Precio por hora: ${cur} ${money(j.rate)}<br>`;
-    detail += `Mano de obra: ${cur} ${money(j.labor)}<br>`;
-  }else{
-    detail += `Moneda: <strong>${cur}</strong><br>`;
-    detail += `Mano de obra fija: ${cur} ${money(j.labor)}<br>`;
+function readInvoiceData(){
+  try{
+    const hash = window.location.hash || "";
+    if(!hash.startsWith("#data=")) return null;
+    const raw = decodeURIComponent(hash.slice(6));
+    const parsed = JSON.parse(raw);
+    if(!parsed || !Array.isArray(parsed.items)) return null;
+    return parsed;
+  }catch(e){
+    return null;
   }
+}
 
-  if(j.expenses && j.expenses.length){
-    detail += `<strong>Gastos incluidos:</strong><br>`;
-    j.expenses.forEach(e=>{
-      detail += `• ${e.desc}: ${cur} ${money(e.amount)}<br>`;
-    });
-  }
+const data = readInvoiceData();
 
-  $("items").innerHTML += `
-    <tr>
-      <td>
-        ${(j.selectedTexts||[]).map((t,idx)=>`
-          ${idx>0?`<hr style="margin:8px 0;border:none;border-top:1px dashed #ccc">`:""}
-          <div style="font-weight:900">${String(t.subject||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
-          ${(t.details||"").trim()?`<div style="font-size:12px;opacity:.85;margin-top:4px">${String(t.details).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>`:""}
-        `).join("")}
-      </td>
-      <td>${j.date}</td>
+if(!data){
+  document.body.innerHTML = `
+    <div style="font-family:Arial;padding:30px">
+      <h2>No se pudieron cargar los datos de la factura.</h2>
+      <p>Vuelve a REPORTES y presiona “Imprimir factura” nuevamente.</p>
+    </div>`;
+}else{
+  $("cliente").textContent = data.villa || "";
+  $("periodo").textContent = data.mes || "";
+  $("fecha").textContent = new Date().toLocaleDateString("es-DO");
+
+  let sumRD = 0;
+  let sumUSD = 0;
+  const tbody = $("items");
+
+  data.items.forEach(item=>{
+    const cur = item.currency || "RD$";
+    if(cur === "US$") sumUSD += Number(item.total || 0);
+    else sumRD += Number(item.total || 0);
+
+    const languageHtml = (item.selectedTexts || []).map((text,idx)=>{
+      const separator = idx > 0
+        ? `<hr style="margin:8px 0;border:none;border-top:1px dashed #ccc">`
+        : "";
+
+      return `
+        ${separator}
+        ${text.subject ? `<div style="font-weight:900">${esc(text.subject)}</div>` : ""}
+        ${text.details ? `<div style="font-size:12px;opacity:.85;margin-top:4px">${esc(text.details)}</div>` : ""}
+      `;
+    }).join("");
+
+    let detail = "";
+
+    if(item.start && item.end){
+      detail += `Moneda: <strong>${cur}</strong><br>`;
+      detail += `Horario: ${esc(item.start)} → ${esc(item.end)}<br>`;
+      if(item.hours_fmt) detail += `Horas trabajadas: ${esc(item.hours_fmt)}<br>`;
+      detail += `Precio por hora: ${cur} ${money(item.rate)}<br>`;
+      detail += `Mano de obra: ${cur} ${money(item.labor)}<br>`;
+    }else{
+      detail += `Moneda: <strong>${cur}</strong><br>`;
+      detail += `Mano de obra fija: ${cur} ${money(item.labor)}<br>`;
+    }
+
+    if(Array.isArray(item.expenses) && item.expenses.length){
+      detail += `
+        <div style="margin-top:10px;padding:8px;border:1px solid #bbb;border-radius:6px">
+          <div style="font-weight:900;margin-bottom:5px">GASTOS / EXPENSES</div>
+      `;
+      item.expenses.forEach(e=>{
+        detail += `
+          <div style="margin:3px 0">
+            ${esc(e.desc || "Gasto")}: <strong>${cur} ${money(e.amount)}</strong>
+          </div>
+        `;
+      });
+      detail += `</div>`;
+    }
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${languageHtml}</td>
+      <td>${esc(item.date || "")}</td>
       <td>${detail}</td>
-      <td>${cur} ${money(j.total)}</td>
-    </tr>
-  `;
-});
+      <td>${cur} ${money(item.total)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
 
-$("totalRD").textContent = money(sumRD);
-$("totalUSD").textContent = money(sumUSD);
+  $("totalRD").textContent = money(sumRD);
+  $("totalUSD").textContent = money(sumUSD);
+}
 </script>
 </body>
 </html>
