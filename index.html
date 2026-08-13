@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Safe Home – Property Management</title>
+<link rel="manifest" href="manifest.json">
+<style>
+
+:root{
+  --bg:#0b0b0b;
+  --panel:#111;
+  --card:#151515;
+  --border:#262626;
+  --text:#f5f5f5;
+  --muted:#b5b5b5;
+  --gold:#d4af37;
+  --green:#1dd1a1;
+  --red:#e74c3c;
+  --blue:#4aa3ff;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:"Segoe UI",Inter,Arial,sans-serif;
+  background:radial-gradient(circle at top,#1a1a1a,#0b0b0b);
+  color:var(--text);
+}
+header{
+  padding:28px 16px 22px;
+  text-align:center;
+  border-bottom:1px solid var(--border);
+}
+header img{width:120px;margin-bottom:12px}
+header h1{margin:0;font-size:28px;letter-spacing:2px;color:var(--gold)}
+header .sub{margin-top:6px;font-size:13px;letter-spacing:3px;color:#cfcfcf}
+.wrap{max-width:1100px;margin:auto;padding:20px}
+label{font-size:12px;color:var(--muted)}
+input,select,textarea{
+  padding:10px 14px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:var(--panel);
+  color:var(--text);
+  outline:none;
+}
+textarea{min-height:90px;resize:vertical}
+.row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
+.card{
+  background:linear-gradient(180deg,#161616,#101010);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:16px;
+}
+.actions{
+  display:flex;
+  justify-content:center;
+  gap:14px;
+  flex-wrap:wrap;
+  margin:14px 0 22px;
+}
+button{
+  padding:12px 18px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:linear-gradient(180deg,#1a1a1a,#111);
+  color:#fff;
+  font-weight:800;
+  cursor:pointer;
+}
+button:hover{filter:brightness(1.15)}
+button.primary{
+  background:linear-gradient(180deg,#1dd1a1,#17b890);
+  color:#062a20;
+  border:none;
+}
+button.secondary{border-color:var(--gold);color:var(--gold)}
+button.danger{
+  background:linear-gradient(180deg,#ff6b6b,#e74c3c);
+  border:none;
+}
+.badge{
+  display:inline-block;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  font-size:12px;
+  color:var(--muted);
+}
+.badge.ok{color:var(--green);border-color:#1dd1a155}
+.badge.warn{color:#ffd166;border-color:#ffd16655}
+.money{
+  font-size:22px;
+  font-weight:900;
+  color:var(--green);
+}
+.muted{font-size:12px;color:var(--muted)}
+.hr{border-top:1px solid var(--border);margin:18px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:800px){.grid2{grid-template-columns:1fr}}
+.modal-backdrop{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.6);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+.modal{width:min(720px,100%);}
+.modal h2{margin:0 0 10px;letter-spacing:1px}
+.modal .actions{margin:10px 0 0;justify-content:flex-end}
+.smallbtn{padding:8px 12px;border-radius:12px;font-weight:800}
+.list{display:flex;flex-direction:column;gap:14px}
+
+.total-box{
+  background:linear-gradient(180deg,#151515,#0f0f0f);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:14px 20px;
+  text-align:center;
+}
+.total-box .label{font-size:12px;color:var(--muted);letter-spacing:2px}
+.total-box .total{font-size:22px;font-weight:900;color:var(--green)}
+.job-title{font-size:18px;font-weight:900}
+.job-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.expense{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px dashed var(--border);border-radius:14px;margin-top:8px}
+.expense span{font-size:13px;color:var(--muted)}
+.amountline{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-top:8px}
+.amountline .money{font-size:20px}
+</style>
+  <meta name="theme-color" content="#0b0b0b">
+</head>
+<body>
+<header>
+  <img src="logo.png" alt="Safe Home Logo">
+  <h1>SAFE HOME</h1>
+  <div class="sub">PROPERTY MANAGEMENT</div>
+</header>
+
+<div class="wrap">
+
+  <div class="row">
+    <div>
+      <label>Mes</label><br>
+      <input type="month" id="monthPick">
+    </div>
+
+    <div>
+      <label>Filtrar por villas</label><br>
+      <select id="villaFilter"></select>
+    </div>
+
+    <div class="total-box">
+      <div class="label">TOTAL RD$</div>
+      <div class="total" id="monthTotalRD">RD$ 0.00</div>
+    </div>
+
+    <div class="total-box">
+      <div class="label">TOTAL US$</div>
+      <div class="total" id="monthTotalUSD">US$ 0.00</div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button id="btnOpenAddJob" class="primary">➕ AGREGAR TRABAJO</button>
+    <button class="secondary" onclick="location.href='villas.html'">🏡 VILLAS / APARTAMENTOS</button>
+    <button class="secondary" onclick="location.href='reporte_mensual.html'">📄 REPORTES</button>
+  </div>
+
+  <div class="actions">
+    <button onclick="backupAllData()">💾 GUARDAR DATOS</button>
+    <button onclick="restoreAllData()">♻️ RECUPERAR DATOS</button>
+  </div>
+
+  <div class="list" id="jobsList"></div>
+
+</div>
+
+<!-- MODAL: AGREGAR/EDITAR TRABAJO -->
+<div class="modal-backdrop" id="jobModalBackdrop">
+  <div class="card modal">
+    <h2 id="jobModalTitle">Agregar trabajo</h2>
+
+    <div class="grid2">
+      <div>
+        <label>Villa / Apartamento</label><br>
+        <select id="jobVilla"></select>
+      </div>
+      <div>
+        <label>Fecha</label><br>
+        <input type="date" id="jobDate">
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label>Asunto en Español</label><br>
+        <input id="jobSubjectEs" placeholder="Ej: Reparación de cama" style="width:100%;font-weight:900">
+      </div>
+      <div>
+        <label>Subject in English</label><br>
+        <input id="jobSubjectEn" placeholder="Ex: Bed repair" style="width:100%;font-weight:900">
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label>Detalles en Español</label><br>
+        <textarea id="jobDetailsEs" placeholder="Ej: Se ajustó la estructura, se reforzó la base y se probó estabilidad." style="width:100%"></textarea>
+      </div>
+      <div>
+        <label>Details in English</label><br>
+        <textarea id="jobDetailsEn" placeholder="Ex: The structure was adjusted, the base reinforced, and stability tested." style="width:100%"></textarea>
+      </div>
+    </div>
+
+    <div class="muted" style="margin-top:8px">Puedes llenar solo Español, solo Inglés, o ambos.</div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label>Moneda</label><br>
+        <select id="jobCurrency">
+          <option value="RD$">RD$ (Pesos Dominicanos)</option>
+          <option value="US$">US$ (Dólares)</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Tipo de cobro</label><br>
+        <select id="jobType">
+          <option value="fixed">Monto fijo</option>
+          <option value="hours">Por horas</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid2" id="fixedBox" style="margin-top:12px">
+      <div>
+        <label>Monto (mano de obra)</label><br>
+        <input id="jobLabor" type="number" step="0.01" placeholder="0.00">
+      </div>
+      <div>
+        <label>Estado</label><br>
+        <select id="jobStatus">
+          <option value="pendiente">PENDIENTE</option>
+          <option value="realizado">REALIZADO</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="grid2" id="hoursBox" style="margin-top:12px; display:none">
+      <div>
+        <label>Hora inicio (HH:MM)</label><br>
+        <input id="jobStart" type="time">
+      </div>
+      <div>
+        <label>Hora salida (HH:MM)</label><br>
+        <input id="jobEnd" type="time">
+      </div>
+      <div>
+        <label>Precio por hora</label><br>
+        <input id="jobRate" type="number" step="0.01" placeholder="0.00">
+      </div>
+      <div>
+        <label>Estado</label><br>
+        <select id="jobStatus2">
+          <option value="pendiente">PENDIENTE</option>
+          <option value="realizado">REALIZADO</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="secondary" onclick="closeJobModal()">Cancelar</button>
+      <button class="primary" onclick="saveJobFromModal()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: GASTO -->
+<div class="modal-backdrop" id="expModalBackdrop">
+  <div class="card modal">
+    <h2>Agregar gasto</h2>
+    <div class="grid2">
+      <div>
+        <label>Descripción</label><br>
+        <input id="expDesc" placeholder="Ej: Compra de pieza">
+      </div>
+      <div>
+        <label>Monto</label><br>
+        <input id="expAmount" type="number" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    <div class="muted" style="margin-top:10px">
+      Nota: El gasto se guarda en la misma moneda del trabajo.
+    </div>
+    <div class="actions">
+      <button class="secondary" onclick="closeExpModal()">Cancelar</button>
+      <button class="primary" onclick="saveExpenseFromModal()">Guardar gasto</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="restoreInput" accept=".json" style="display:none">
+
+<script src="app.js"></script>
+
+<script>
+function backupAllData(){
+  const data = {};
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    data[k] = localStorage.getItem(k);
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
+  const date = new Date().toISOString().slice(0,10);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `safehome_backup_${date}.json`;
+  a.click();
+}
+function restoreAllData(){
+  const input = document.getElementById("restoreInput");
+  input.click();
+  input.onchange = () => {
+    const file = input.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try{
+        const data = JSON.parse(e.target.result);
+        localStorage.clear();
+        Object.keys(data).forEach(k=>localStorage.setItem(k, data[k]));
+        alert("Datos restaurados correctamente. La app se recargará.");
+        location.reload();
+      }catch(err){
+        alert("Archivo de respaldo inválido");
+      }
+    };
+    reader.readAsText(file);
+  };
+}
+</script>
+
+<script>
+if("serviceWorker" in navigator){
+  try{ navigator.serviceWorker.register("./sw.js"); }catch(e){}
+}
+</script>
+</body>
+</html>

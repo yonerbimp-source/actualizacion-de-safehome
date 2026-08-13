@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Factura – Safe Home</title>
+
+<style>
+body{font-family:"Segoe UI",Arial,sans-serif;margin:40px;color:#000;}
+.center{text-align:center}
+hr{border:none;border-top:1px solid #bbb;margin:20px 0}
+.logo{width:130px;margin-bottom:10px}
+h1{margin:6px 0 0;letter-spacing:3px;}
+.sub{font-size:13px;letter-spacing:2px}
+.block{margin-top:16px;font-size:14px;line-height:1.6;}
+.flex{display:flex;justify-content:space-between;gap:30px;}
+.box{width:50%;}
+table{width:100%;border-collapse:collapse;margin-top:18px;}
+th,td{border:1px solid #ccc;padding:8px;font-size:13px;vertical-align:top;}
+th{background:#f2f2f2}
+.totalwrap{margin-top:18px;}
+.totalrow{display:flex;justify-content:flex-end;gap:22px;flex-wrap:wrap;font-size:18px;font-weight:800;}
+.footer{margin-top:30px;font-size:13px;text-align:center;line-height:1.6;}
+.print{margin-top:30px;text-align:right;}
+@media print{.print{display:none}}
+</style>
+</head>
+
+<body>
+<div class="center">
+  <img src="logo.png" class="logo">
+  <h1>SAFE HOME</h1>
+  <div class="sub">PROPERTY MANAGEMENT</div>
+  <div class="block">Punta Cana · Bávaro · Cap Cana</div>
+  <div class="block">
+    <strong>Yonerbi Mendoza</strong><br>
+    Gerente de Mantenimiento y Operaciones<br>
+    <em>Maintenance & Operations Manager</em>
+  </div>
+</div>
+
+<hr>
+
+<div class="flex block">
+  <div class="box">
+    <strong>Cliente / Propiedad:</strong><br>
+    <span id="cliente"></span>
+  </div>
+  <div class="box">
+    <strong>Periodo:</strong> <span id="periodo"></span><br>
+    <strong>Fecha:</strong> <span id="fecha"></span>
+  </div>
+</div>
+
+<div class="block">
+  <table>
+    <thead>
+      <tr>
+        <th>Descripción</th>
+        <th>Fecha</th>
+        <th>Detalle del trabajo</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody id="items"></tbody>
+  </table>
+</div>
+
+<div class="totalwrap">
+  <div class="totalrow">
+    <div>TOTAL RD$: <span id="totalRD">0.00</span></div>
+    <div>TOTAL US$: <span id="totalUSD">0.00</span></div>
+  </div>
+</div>
+
+<div class="footer">
+  📞 +1 (829) 410-0985 · ✉️ yonerbimp@gmail.com<br>
+  <strong>Servicios:</strong> Inspecciones · Mantenimiento · Supervisión<br>
+  <em>Services:</em> Inspections · Maintenance · Supervision<br>
+  ⚠️ 24/7 Emergencias · Emergency Response
+</div>
+
+<div class="print">
+  <button onclick="window.print()">🖨 Imprimir factura</button>
+</div>
+
+<script>
+let data = {};
+try{
+  const hash = window.location.hash || "";
+  if(hash.startsWith("#data=")){
+    data = JSON.parse(decodeURIComponent(hash.slice(6)));
+  }else{
+    // Compatibilidad con versiones anteriores.
+    data = JSON.parse(sessionStorage.getItem("FACTURA_DATA") || "{}");
+  }
+}catch(e){
+  data = {};
+}
+const $ = id => document.getElementById(id);
+
+function money(n){ return Number(n||0).toLocaleString("es-DO",{minimumFractionDigits:2}); }
+
+function toMinutes(hhmm){
+  const [h,m] = String(hhmm||"0:0").split(":").map(Number);
+  return (h||0)*60 + (m||0);
+}
+function minutesBetween(a,b){
+  const s=toMinutes(a);
+  let e=toMinutes(b);
+  if(e<=s) e+=24*60;
+  return e-s;
+}
+function formatHMFromMinutes(mins){
+  const total=Math.max(0, Math.round(Number(mins)||0));
+  const h=Math.floor(total/60);
+  const m=total%60;
+  return `${h}h ${m}m`;
+}
+function formatDuration(a,b){
+  if(!a||!b) return "";
+  return formatHMFromMinutes(minutesBetween(a,b));
+}
+
+
+if(!data || !Array.isArray(data.items)){
+  document.body.innerHTML = `<div style="font-family:Arial;padding:30px"><h2>No se pudieron cargar los datos de la factura.</h2><p>Vuelve a REPORTES y presiona “Imprimir factura” nuevamente.</p></div>`;
+  throw new Error("FACTURA_DATA no disponible");
+}
+
+$("cliente").textContent = data.villa || "";
+$("periodo").textContent = data.mes || "";
+$("fecha").textContent = new Date().toLocaleDateString();
+
+let sumRD = 0;
+let sumUSD = 0;
+
+(data.items || []).forEach(j=>{
+  const cur = j.currency || "RD$";
+  if(cur==="US$") sumUSD += Number(j.total||0);
+  else sumRD += Number(j.total||0);
+
+  let detail = "";
+  if(j.start && j.end){
+    detail += `Moneda: <strong>${cur}</strong><br>`;
+    detail += `Horario: ${j.start} → ${j.end}<br>`;
+    detail += `Horas trabajadas: ${j.hours_fmt || (j.start&&j.end?formatDuration(j.start,j.end): (j.hours_decimal!=null?`${j.hours_decimal}h`:""))}<br>`;
+    detail += `Precio por hora: ${cur} ${money(j.rate)}<br>`;
+    detail += `Mano de obra: ${cur} ${money(j.labor)}<br>`;
+  }else{
+    detail += `Moneda: <strong>${cur}</strong><br>`;
+    detail += `Mano de obra fija: ${cur} ${money(j.labor)}<br>`;
+  }
+
+  if(j.expenses && j.expenses.length){
+    detail += `<strong>Gastos incluidos:</strong><br>`;
+    j.expenses.forEach(e=>{
+      detail += `• ${e.desc}: ${cur} ${money(e.amount)}<br>`;
+    });
+  }
+
+  $("items").innerHTML += `
+    <tr>
+      <td>
+        ${(j.selectedTexts||[]).map((t,idx)=>`
+          ${idx>0?`<hr style="margin:8px 0;border:none;border-top:1px dashed #ccc">`:""}
+          <div style="font-weight:900">${String(t.subject||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+          ${(t.details||"").trim()?`<div style="font-size:12px;opacity:.85;margin-top:4px">${String(t.details).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>`:""}
+        `).join("")}
+      </td>
+      <td>${j.date}</td>
+      <td>${detail}</td>
+      <td>${cur} ${money(j.total)}</td>
+    </tr>
+  `;
+});
+
+$("totalRD").textContent = money(sumRD);
+$("totalUSD").textContent = money(sumUSD);
+</script>
+</body>
+</html>

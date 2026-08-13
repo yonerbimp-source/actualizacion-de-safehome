@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Safe Home – Villas y Apartamentos</title>
+<style>
+
+:root{
+  --bg:#0b0b0b;
+  --panel:#111;
+  --card:#151515;
+  --border:#262626;
+  --text:#f5f5f5;
+  --muted:#b5b5b5;
+  --gold:#d4af37;
+  --green:#1dd1a1;
+  --red:#e74c3c;
+  --blue:#4aa3ff;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:"Segoe UI",Inter,Arial,sans-serif;
+  background:radial-gradient(circle at top,#1a1a1a,#0b0b0b);
+  color:var(--text);
+}
+header{
+  padding:28px 16px 22px;
+  text-align:center;
+  border-bottom:1px solid var(--border);
+}
+header img{width:120px;margin-bottom:12px}
+header h1{margin:0;font-size:28px;letter-spacing:2px;color:var(--gold)}
+header .sub{margin-top:6px;font-size:13px;letter-spacing:3px;color:#cfcfcf}
+.wrap{max-width:1100px;margin:auto;padding:20px}
+label{font-size:12px;color:var(--muted)}
+input,select,textarea{
+  padding:10px 14px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:var(--panel);
+  color:var(--text);
+  outline:none;
+}
+textarea{min-height:90px;resize:vertical}
+.row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
+.card{
+  background:linear-gradient(180deg,#161616,#101010);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:16px;
+}
+.actions{
+  display:flex;
+  justify-content:center;
+  gap:14px;
+  flex-wrap:wrap;
+  margin:14px 0 22px;
+}
+button{
+  padding:12px 18px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:linear-gradient(180deg,#1a1a1a,#111);
+  color:#fff;
+  font-weight:800;
+  cursor:pointer;
+}
+button:hover{filter:brightness(1.15)}
+button.primary{
+  background:linear-gradient(180deg,#1dd1a1,#17b890);
+  color:#062a20;
+  border:none;
+}
+button.secondary{border-color:var(--gold);color:var(--gold)}
+button.danger{
+  background:linear-gradient(180deg,#ff6b6b,#e74c3c);
+  border:none;
+}
+.badge{
+  display:inline-block;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  font-size:12px;
+  color:var(--muted);
+}
+.badge.ok{color:var(--green);border-color:#1dd1a155}
+.badge.warn{color:#ffd166;border-color:#ffd16655}
+.money{
+  font-size:22px;
+  font-weight:900;
+  color:var(--green);
+}
+.muted{font-size:12px;color:var(--muted)}
+.hr{border-top:1px solid var(--border);margin:18px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:800px){.grid2{grid-template-columns:1fr}}
+.modal-backdrop{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.6);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+.modal{width:min(720px,100%);}
+.modal h2{margin:0 0 10px;letter-spacing:1px}
+.modal .actions{margin:10px 0 0;justify-content:flex-end}
+.smallbtn{padding:8px 12px;border-radius:12px;font-weight:800}
+.list{display:flex;flex-direction:column;gap:14px}
+
+.title{font-size:18px;font-weight:900}
+.totals{margin-top:6px;display:flex;gap:10px;flex-wrap:wrap}
+.totals .money{font-size:18px}
+.job{margin-top:10px;padding:12px;border-radius:14px;border:1px dashed var(--border)}
+</style>
+</head>
+<body>
+<header>
+  <img src="logo.png" alt="Safe Home Logo">
+  <h1>SAFE HOME</h1>
+  <div class="sub">PROPERTY MANAGEMENT</div>
+</header>
+
+<div class="wrap">
+  <div class="actions">
+    <button class="primary" onclick="toggleAdd()">➕ AGREGAR VILLA / APARTAMENTO</button>
+    <button onclick="location.href='index.html'">⬅ VOLVER</button>
+  </div>
+
+  <div id="addBox" class="card" style="display:none;margin-bottom:18px">
+    <div class="grid2">
+      <div>
+        <label>Tipo de propiedad</label><br>
+        <select id="propertyType">
+          <option value="Villa">Villa</option>
+          <option value="Apartamento">Apartamento</option>
+        </select>
+      </div>
+      <div>
+        <label>Propietario</label><br>
+        <input id="owner" placeholder="Nombre">
+      </div>
+      <div>
+        <label>Número de villa / apartamento</label><br>
+        <input id="number" placeholder="Ej: 12">
+      </div>
+      <div>
+        <label>Residencial</label><br>
+        <input id="residential" placeholder="Ej: Costa Bavaro">
+      </div>
+      <div style="align-self:end">
+        <button class="primary" onclick="addVilla()">GUARDAR PROPIEDAD</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="list" id="villaList"></div>
+</div>
+
+<script>
+const VILLAS_KEY="safehome_villas";
+const JOBS_KEY="safehome_jobs_base";
+const $=id=>document.getElementById(id);
+
+let villas=[], jobs=[];
+let editingPropertyIndex = null;
+
+function money(n){ return Number(n||0).toLocaleString("es-DO",{minimumFractionDigits:2}); }
+
+function load(){
+  villas = JSON.parse(localStorage.getItem(VILLAS_KEY) || "[]");
+  jobs   = JSON.parse(localStorage.getItem(JOBS_KEY) || "[]");
+}
+function saveVillas(){
+  localStorage.setItem(VILLAS_KEY, JSON.stringify(villas));
+}
+
+function toMinutes(hhmm){
+  const p=String(hhmm||"").split(":").map(Number);
+  return (p[0]||0)*60+(p[1]||0);
+}
+function hoursBetween(a,b){
+  let s=toMinutes(a), e=toMinutes(b);
+  if(e<=s) e+=12*60;
+  return (e-s)/60;
+}
+function jobLabor(j){
+  if((j.type==="hours" || (j.start && j.end && j.rate)) && j.start && j.end && j.rate){
+    return Number((hoursBetween(j.start,j.end)*Number(j.rate)).toFixed(2));
+  }
+  return Number(j.labor||0);
+}
+function jobTotal(j){
+  const lab = jobLabor(j);
+  const exp = (j.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
+  return lab + exp;
+}
+
+function villaTotals(name){
+  const totals={"RD$":0,"US$":0};
+  jobs.filter(j=>j.villa===name).forEach(j=>{
+    const cur = j.currency || "RD$";
+    totals[cur] += jobTotal(j);
+  });
+  return totals;
+}
+
+function toggleAdd(){
+  const el=$("addBox");
+  const opening = el.style.display==="none";
+  if(opening){
+    editingPropertyIndex = null;
+    $("propertyType").value = "Villa";
+    $("owner").value = "";
+    $("number").value = "";
+    $("residential").value = "";
+    const saveBtn = el.querySelector("button.primary");
+    if(saveBtn) saveBtn.textContent = "GUARDAR PROPIEDAD";
+  }
+  el.style.display = opening ? "block" : "none";
+}
+
+function addVilla(){
+  const propertyType=$("propertyType").value;
+  const owner=$("owner").value.trim();
+  const number=$("number").value.trim();
+  const residential=$("residential").value.trim();
+  if(!owner||!number||!residential) return alert("Completa todo");
+
+  if(editingPropertyIndex !== null && villas[editingPropertyIndex]){
+    const old = villas[editingPropertyIndex];
+    const oldName = `${old.owner} – ${old.type || "Villa"} ${old.number}`;
+    const updated = {owner,number,residential,type:propertyType};
+    const newName = `${updated.owner} – ${updated.type || "Villa"} ${updated.number}`;
+
+    villas[editingPropertyIndex] = updated;
+
+    // Actualiza los trabajos que estaban ligados al nombre anterior.
+    let jobsChanged = false;
+    jobs.forEach(j=>{
+      if(j.villa === oldName){
+        j.villa = newName;
+        jobsChanged = true;
+      }
+    });
+    if(jobsChanged){
+      localStorage.setItem(JOBS_KEY, JSON.stringify(jobs));
+    }
+
+    editingPropertyIndex = null;
+  }else{
+    villas.push({owner,number,residential,type:propertyType});
+  }
+
+  saveVillas();
+  $("propertyType").value="Villa";
+  $("owner").value="";
+  $("number").value="";
+  $("residential").value="";
+  const saveBtn = $("addBox").querySelector("button.primary");
+  if(saveBtn) saveBtn.textContent = "GUARDAR PROPIEDAD";
+  $("addBox").style.display="none";
+  render();
+}
+
+function editProperty(i){
+  const v = villas[i];
+  if(!v) return;
+  editingPropertyIndex = i;
+  $("propertyType").value = v.type || "Villa";
+  $("owner").value = v.owner || "";
+  $("number").value = v.number || "";
+  $("residential").value = v.residential || "";
+  const saveBtn = $("addBox").querySelector("button.primary");
+  if(saveBtn) saveBtn.textContent = "GUARDAR CAMBIOS";
+  $("addBox").style.display = "block";
+  $("addBox").scrollIntoView({behavior:"smooth", block:"center"});
+}
+
+function toggleJobs(i){
+  const el=$("jobs-"+i);
+  el.style.display = el.style.display==="none" ? "block" : "none";
+}
+
+function render(){
+  const list=$("villaList");
+  list.innerHTML="";
+  if(!villas.length){
+    list.innerHTML="<div class='muted'>No hay villas ni apartamentos registrados</div>";
+    return;
+  }
+
+  villas.forEach((v,i)=>{
+    const type=v.type || "Villa";
+    const name=`${v.owner} – ${type} ${v.number}`;
+    const related = jobs.filter(j=>j.villa===name);
+    const totals = villaTotals(name);
+
+    const d=document.createElement("div");
+    d.className="card";
+    d.innerHTML=`
+      <div class="title">${name}</div>
+      <div class="muted">${v.residential}</div>
+
+      <div class="totals">
+        <div class="money">RD$ ${money(totals["RD$"])}</div>
+        <div class="money">US$ ${money(totals["US$"])}</div>
+      </div>
+
+      <div class="actions" style="justify-content:flex-start;margin:12px 0 0">
+        <button class="secondary" onclick="toggleJobs(${i})">VER TRABAJOS</button>
+        <button onclick="editProperty(${i})">MODIFICAR</button>
+        <button class="danger" onclick="del(${i})">ELIMINAR</button>
+      </div>
+
+      <div id="jobs-${i}" style="display:none;margin-top:10px">
+        ${
+          related.length ? related.map(j=>{
+            const cur=j.currency||"RD$";
+            return `
+              <div class="job">
+                <strong>${j.subject || j.desc || ""}</strong><br>
+                ${(j.details||"").trim()?`<span class="muted">${String(j.details).replace(/</g,"&lt;").replace(/>/g,"&gt;")}</span><br>`:""}
+                <span class="muted">${j.date} · ${cur}</span><br>
+                <span class="money">${cur} ${money(jobTotal(j))}</span>
+              </div>
+            `;
+          }).join("") : "<div class='muted'>No hay trabajos</div>"
+        }
+      </div>
+    `;
+    list.appendChild(d);
+  });
+}
+
+function del(i){
+  if(!confirm("¿Eliminar esta propiedad?")) return;
+  villas.splice(i,1);
+  if(editingPropertyIndex === i){
+    editingPropertyIndex = null;
+    $("addBox").style.display = "none";
+  }else if(editingPropertyIndex !== null && editingPropertyIndex > i){
+    editingPropertyIndex--;
+  }
+  saveVillas();
+  render();
+}
+
+document.addEventListener("DOMContentLoaded",()=>{
+  load();
+  render();
+});
+</script>
+</body>
+</html>
